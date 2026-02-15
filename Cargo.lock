@@ -1094,24 +1094,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c"
 
 [[package]]
-name = "poketermdle-common"
+name = "poketermdle-client"
 version = "0.1.0"
 dependencies = [
- "serde",
+ "futures-channel",
+ "futures-util",
+ "tokio",
+ "tokio-tungstenite",
 ]
+
+[[package]]
+name = "poketermdle-common"
+version = "0.1.0"
 
 [[package]]
 name = "poketermdle-server"
 version = "0.1.0"
 dependencies = [
- "bincode",
  "futures-channel",
  "futures-util",
  "log",
- "poketermdle-common",
  "rand",
  "rustemon",
- "serde",
  "tokio",
  "tokio-tungstenite",
 ]
@@ -1580,9 +1584,9 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
 name = "syn"
-version = "2.0.116"
+version = "2.0.115"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3df424c70518695237746f84cede799c9c58fcb37450d7b23716568cc8bc69cb"
+checksum = "6e614ed320ac28113fa64972c4262d5dbc89deacdfd00c34a3e4cea073243c12"
 dependencies = [
  "proc-macro2",
  "quote",

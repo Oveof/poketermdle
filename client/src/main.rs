@@ -13,6 +13,7 @@
 use std::env;
 
 use futures_util::{StreamExt, future, pin_mut};
+use poketermdle_common::LobbyMessage;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
@@ -33,8 +34,15 @@ async fn main() {
     let stdin_to_ws = stdin_rx.map(Ok).forward(write);
     let ws_to_stdout = {
         read.for_each(|message| async {
-            let data = message.unwrap().into_data();
-            tokio::io::stdout().write_all(&data).await.unwrap();
+            let message = message.unwrap();
+            match message {
+                Message::Text(s) => println!("received text: {}", s),
+                Message::Binary(b) => {
+                    let msg = bincode::deserialize::<LobbyMessage>(&b.to_vec()).unwrap();
+                    println!("{:?}", msg);
+                }
+                other => println!("received: {:?}", other),
+            }
         })
     };
 
@@ -53,6 +61,7 @@ async fn read_stdin(tx: futures_channel::mpsc::UnboundedSender<Message>) {
             Ok(n) => n,
         };
         buf.truncate(n);
-        tx.unbounded_send(Message::binary(buf)).unwrap();
+        tx.unbounded_send(Message::Text(String::from_utf8(buf).unwrap().into()))
+            .unwrap();
     }
 }
