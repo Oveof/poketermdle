@@ -6,7 +6,13 @@ use rand::{
     Rng,
     distr::{Alphanumeric, SampleString},
 };
-use rustemon::{client::RustemonClient, pokemon::pokemon_species};
+use rustemon::{
+    Follow,
+    client::RustemonClient,
+    evolution::{self, evolution_chain},
+    model::{evolution::EvolutionChain, pokemon, resource::ApiResource},
+    pokemon::pokemon_species,
+};
 use serde::{Deserialize, Serialize};
 use tokio::{
     net::{TcpListener, TcpStream},
@@ -33,7 +39,6 @@ async fn main() -> Result<(), IoError> {
     let mut lobby = Lobby::new().await;
     while let Ok((stream, addr)) = listener.accept().await {
         lobby.add_player(stream, addr).await;
-        lobby.run().await;
         // lobby.players.push(::new(ws_stream, addr));
         // tokio::spawn(handle_connection_new(stream, addr));
     }
@@ -46,6 +51,7 @@ async fn main() -> Result<(), IoError> {
 
     Ok(())
 }
+
 struct Lobby {
     name: String,
     players: Vec<String>,
@@ -154,7 +160,7 @@ impl Player {
                         self.game_tx
                             .send(LobbyMessage {
                                 player_name: self.name.clone(),
-                                content: GameMessage::Guess(txt.to_string()),
+                                content: GameMessage::Guess(txt.to_string().trim_end().to_string()),
                             })
                             .await;
                     }
@@ -193,6 +199,7 @@ pub async fn handle_connection_new(raw_stream: TcpStream, addr: SocketAddr) {
     println!("{} disconnected", &addr);
 }
 
+#[derive(Debug)]
 struct Solution {
     pub current_pokemon: Option<rustemon::model::pokemon::Pokemon>,
     pub current_pokemon_species: Option<rustemon::model::pokemon::PokemonSpecies>,
@@ -223,18 +230,29 @@ impl GameState {
 
         return state;
     }
-    async fn get_evolution_number(&mut self, pokemon_name: &str) -> i64 {
-        let evolution_chain =
-            rustemon::evolution::evolution_chain::get_by_name(&pokemon_name, &self.client).await;
+    async fn get_evolution_number(
+        &mut self,
+        pokemon_name: &str,
+        resource: &ApiResource<EvolutionChain>,
+    ) -> i64 {
+        let evolution_chain = resource.follow(&self.client).await;
         if evolution_chain.is_err() {
-            println!("{}, {:?}", pokemon_name, evolution_chain);
+            println!("{:?}", evolution_chain);
         }
-        for (num, evolution) in evolution_chain.unwrap().chain.evolves_to.iter().enumerate() {
-            if evolution.species.name == pokemon_name {
-                return (num + 1) as i64;
+        if evolution_chain.as_ref().unwrap().chain.species.name == pokemon_name {
+            return 1;
+        }
+        for (num, evolution_next) in evolution_chain.unwrap().chain.evolves_to.iter().enumerate() {
+            if evolution_next.species.name == pokemon_name {
+                return 2 as i64;
+            }
+            for final_evolution in evolution_next.evolves_to.iter() {
+                if final_evolution.species.name == pokemon_name {
+                    return 3 as i64;
+                }
             }
         }
-        return 0;
+        return -1;
     }
     pub async fn guess(&mut self, pokemon_name: String, player_name: &str) -> GuessResponse {
         let pokemon =
@@ -255,7 +273,12 @@ impl GameState {
         )
         .await
         .unwrap();
-        let evolution_number = self.get_evolution_number(&pokemon_name).await;
+        let evolution_number = self
+            .get_evolution_number(
+                &pokemon_name,
+                pokemon_species.evolution_chain.as_ref().unwrap(),
+            )
+            .await;
 
         let current_generation = self.solution.current_generation.unwrap();
 
@@ -282,6 +305,7 @@ impl GameState {
             generation_response = GuessStatus::Correct("".into());
         }
 
+        println!("evo guessed: {}", evolution_number);
         if evolution_number < self.solution.evolution_number {
             evolution_response = GuessStatus::Low("".into());
         } else if evolution_number > self.solution.evolution_number {
@@ -346,20 +370,28 @@ impl GameState {
         let pokemon_num = rng.random_range(0..=generation.pokemon_species.len());
 
         let pokemon = generation.pokemon_species.get(pokemon_num).unwrap();
+        let pokemon_species = pokemon.follow(&self.client).await.unwrap();
 
         let pokemon_name = pokemon.name.clone();
-        let pokemon_species = rustemon::pokemon::pokemon_species::get_by_name(&pokemon_name, &self.client)
-            .await
-            .unwrap()
 
         self.solution.current_generation = Some(generation.id);
-        self.solution.current_pokemon_species = Some(pokemon_species);
+        self.solution.current_pokemon_species = Some(pokemon_species.clone());
         self.solution.current_pokemon = Some(
             rustemon::pokemon::pokemon::get_by_name(&pokemon_name, &self.client)
                 .await
                 .unwrap(),
         );
-        self.solution.evolution_number = self.get_evolution_number(&pokemon_name).await;
+        let chain_resource = pokemon_species.evolution_chain.as_ref().unwrap();
+
+        self.solution.evolution_number = self
+            .get_evolution_number(&pokemon_name, chain_resource)
+            .await;
+
+        println!(
+            "solution: {} evo:{:?}",
+            &self.solution.current_pokemon.as_ref().unwrap().name,
+            &self.solution.evolution_number
+        );
     }
 }
 

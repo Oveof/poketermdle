@@ -11,6 +11,10 @@ pub enum GameMessage {
     GuessResponse(GuessResponse),
     Guess(String),
     NewName(String),
+
+    NewLobby(String),
+    JoinLobby(String),
+    LeaveLobby(String),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
