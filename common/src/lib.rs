@@ -1,3 +1,5 @@
+use std::net::{SocketAddr, TcpStream};
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -6,15 +8,17 @@ pub struct LobbyMessage {
     pub content: GameMessage,
 }
 
+pub enum LobbyCommand {
+    NewLobby(String),
+    JoinLobby(String),
+    LeaveLobby(String),
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum GameMessage {
     GuessResponse(GuessResponse),
     Guess(String),
     NewName(String),
-
-    NewLobby(String),
-    JoinLobby(String),
-    LeaveLobby(String),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
